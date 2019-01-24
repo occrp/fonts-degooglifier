@@ -6,31 +6,136 @@
 # $1, ... - CSS files or URLs to de-googlify
 #
 
+#
+# helper function -- getting a CSS file name
+# from a fonts.googleapis.com URL
+#
+# $1 -- URL to handle
+function get_local_filename_from_url() {
+    echo -n "$1" | sed -r -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&amp;/__/' | tr '|:+,=' '_-'
+    echo '.css'
+}
+
+#
+# in a local file replace '@import url()' lines
+# that lead to fonts.googleapis.com
+# with locally downloaded CSS files
+# 
+# $1 -- font directory to dump the fonts to
+# $2 -- the CSS file to degooglify
+function degooglify_css_file_import() {
+
+    # source CSS file
+    local CSS_IMPORT_SRC="$2"
+    
+    # destination CSS file
+    local CSS_IMPORT_DEST="${CSS_IMPORT_SRC/.css/.degooglified.css}"
+    
+    # destination directory
+    # assuming it exists and is writeable
+    local FONT_DIR="$1"
+    
+    # inform
+    echo "+-- de-googlifying import statements: $CSS_IMPORT_SRC"
+    echo "    +-- destination font directory : $FONT_DIR/"
+    echo "    +-- destination CSS file       : $CSS_IMPORT_DEST"
+    
+    # make a copy to later work on
+    # (unless it exists already)
+    if [ ! -f "$CSS_IMPORT_DEST" ]; then
+        if ! cp "$CSS_IMPORT_SRC" "$CSS_IMPORT_DEST"; then
+            echo "ERROR: unable to create the destination CSS file: '$CSS_IMPORT_DEST'"
+            exit 1
+        fi
+    else
+        echo
+        echo "NOTICE: destination CSS file already exists: '$CSS_IMPORT_DEST'"
+        echo "NOTICE: (this will not work great if the source or destination)"
+        echo "NOTICE: (files were changed by external programs              )"
+        echo
+    fi
+    [ ! -r "$CSS_IMPORT_DEST" ] && echo "ERROR: destination CSS file is not readable: '$CSS_IMPORT_DEST'" && exit 1
+    [ ! -w "$CSS_IMPORT_DEST" ] && echo "ERROR: destination CSS file is not writable: '$CSS_IMPORT_DEST'" && exit 1
+    
+    
+    # we need to split fields on newlines
+    OLDIFS="$IFS"
+    IFS=$'\n'
+   
+    # first, get the @import statements
+    # that fetch remote fonts.googleapis.com CSS files
+    for CSS_IMPORT_LINE in $( egrep "^[[:space:]]*@import url\('?https://fonts.googleapis.com/css" "$CSS_IMPORT_SRC" ); do
+        
+        # inform
+        echo "    +-- working with: $CSS_IMPORT_LINE"
+        
+        # get the URL
+        # this sed expression will get the *last* occurence of the 'url()' stanza
+        local CSS_IMPORT_URL="$( echo "$CSS_IMPORT_LINE" | sed -r -e "s/.*url\('?([^')]+)'?\).*/\1/g" )"
+        echo "        +-- CSS remote URL: $CSS_IMPORT_URL"
+        
+        # get the local filename
+        local CSS_IMPORT_LOCAL="$( get_local_filename_from_url "$CSS_IMPORT_URL" )"
+        echo "        +-- local filename: $CSS_IMPORT_LOCAL"
+        
+        # fetch and degooglify that file, why not
+        degooglify_css_url "$FONT_DIR" "$CSS_IMPORT_URL"
+        
+        # replace the URL with the local file name
+        
+        echo
+        echo "*** s%$CSS_IMPORT_URL%$CSS_IMPORT_LOCAL%"
+        echo "*** $CSS_IMPORT_DEST"
+        echo
+        sed -i -e "s%$CSS_IMPORT_URL%$CSS_IMPORT_LOCAL%" "$CSS_IMPORT_DEST"
+    done
+    
+    # revert to the original IFS
+    IFS="$OLDIFS"
+}
 
 #
 # the actual workhorse
 # 
+# handling the 'src:' stanzas
+# downloading the fonts and replacing 'url()' sources with locally downloaded files
+# 
 # $1 -- font directory to dump the fonts to
 # $2 -- the CSS file to degooglify
-function degooglify_css_file() {
+function degooglify_css_file_src() {
 
     # source CSS file
-    CSS_SRC="$2"
+    local CSS_SRC="$2"
     
     # destination CSS file
-    CSS_DEST="${CSS_SRC/.css/.degooglified.css}"
-    
-    # make a copy to later work on
-    cp "$CSS_SRC" "$CSS_DEST"|| ( echo "ERROR: unable to create the destination CSS file: '$CSS_DEST'" && exit 1 )
+    local CSS_DEST="${CSS_SRC/.css/.degooglified.css}"
     
     # destination directory
     # assuming it exists and is writeable
-    FONT_DIR="$1"
+    local FONT_DIR="$1"
     
     # inform
-    echo "+-- de-googlifying: $CSS_SRC"
+    echo "+-- de-googlifying src lines: $CSS_SRC"
     echo "    +-- destination font directory : $FONT_DIR/"
     echo "    +-- destination CSS file       : $CSS_DEST"
+    
+    # make a copy to later work on
+    # (unless it exists already)
+    if [ ! -f "$CSS_DEST" ]; then
+        if ! cp "$CSS_SRC" "$CSS_DEST"; then
+            echo "ERROR: unable to create the destination CSS file: '$CSS_DEST'"
+            exit 1
+        fi
+    else
+        echo
+        echo "NOTICE: destination CSS file already exists: '$CSS_DEST'"
+        echo "NOTICE: (this will not work great if the source or destination)"
+        echo "NOTICE: (files were changed by external programs              )"
+        echo
+    fi
+    [ ! -r "$CSS_DEST" ] && echo "ERROR: destination CSS file is not readable: '$CSS_DEST'" && exit 1
+    [ ! -w "$CSS_DEST" ] && echo "ERROR: destination CSS file is not writable: '$CSS_DEST'" && exit 1
+    
     
     # we need to split fields on newlines
     OLDIFS="$IFS"
@@ -40,31 +145,37 @@ function degooglify_css_file() {
     #
     # assumptions:
     # - there is only one instance of each FONT_URL in the whole file
-    for FONT_SRC_LINE in $( egrep '^[[:space:]]+src' "$CSS_SRC" ); do
+    for FONT_SRC_LINE in $( egrep '^[[:space:]]*src' "$CSS_SRC" ); do
     
         # inform
         echo "    +-- working with: $FONT_SRC_LINE"
         
         # get the URL
         # this sed expression will get the *last* occurence of the 'url()' stanza
-        FONT_URL="$( echo "$FONT_SRC_LINE" | sed -r -e "s/.*url\('?([^')]+)'?\).*/\1/g" )"
+        local FONT_URL="$( echo "$FONT_SRC_LINE" | sed -r -e "s/.*url\('?([^')]+)'?\).*/\1/g" )"
         echo "        +-- URL: $FONT_URL"
         
+        # check if the URL is a fonts.gstatic.com one
+        if [[ $FONT_URL != "https://fonts.gstatic.com"* ]]; then
+            echo "        +-- not a Google font URL, ignoring..."
+            continue
+        fi
+        
         # we also need the extension
-        FONT_EXT="${FONT_URL##*.}"
+        local FONT_EXT="${FONT_URL##*.}"
         
         # get the local name
         # this sed expression will get the *last* occurence of the 'local()' stanza
         # tr removes spaces just in case
-        FONT_NAME="$( echo "$FONT_SRC_LINE" | sed -r -e "s/.*local\('?([^')]+)'?\).*/\1/g" | tr -d ' ' )"
+        local FONT_NAME="$( echo "$FONT_SRC_LINE" | sed -r -e "s/.*local\('?([^')]+)'?\).*/\1/g" | tr -d ' ' )"
         
         # download the font
-        FONT_FILE="$FONT_DIR/$FONT_NAME.$FONT_EXT"
+        local FONT_FILE="$FONT_DIR/$FONT_NAME.$FONT_EXT"
         echo "        +-- target: $FONT_FILE"
         wget -nc --progress=dot -O "$FONT_FILE" "$FONT_URL"
         
         # replace the url in the source line in the file
-        sed -i -r -e "s%$FONT_URL%$FONT_FILE%" "$CSS_DEST"
+        sed -i -e "s%$FONT_URL%$FONT_FILE%" "$CSS_DEST"
         
     done
     
@@ -72,6 +183,22 @@ function degooglify_css_file() {
     IFS="$OLDIFS"
 }
 
+
+#
+# handle a local file
+#
+# $1 -- font directory to dump the fonts to
+# $2 -- the CSS file to degooglify
+function degooglify_css_file () {
+  
+    # replace '@import url()' lines leading to fonts.googleapis.com
+    # with locally downloaded CSS files
+    degooglify_css_file_import "$1" "$2"
+    
+    # replace 'src:' lines leading to rempote resources
+    # with locally downloaded fonts
+    degooglify_css_file_src "$1" "$2"
+}
 
 #
 # handle a CSS file available from fonts.googleapis.com
@@ -82,10 +209,10 @@ function degooglify_css_url() {
     
     # destination directory
     # assuming it exists and is writeable
-    FONT_DIR="$1"
+    local FONT_DIR="$1"
     
     # remote CSS file
-    CSS_REMOTE="$2"
+    local CSS_REMOTE="$2"
     
     # reality check -- is this a fonts.googleapis.com/css link?
     if [[ $CSS_REMOTE != "https://fonts.googleapis.com/css"* ]]; then
@@ -94,7 +221,7 @@ function degooglify_css_url() {
     
     # we're good, I guess
     # get the filename from the URL
-    CSS_LOCAL="$( echo "$CSS_REMOTE" | sed -r -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&amp;/__/' | tr '|:+,=' '_-' ).css"
+    local CSS_LOCAL=$( get_local_filename_from_url "$CSS_REMOTE" )
     
     # inform
     echo "+-- downloading remote CSS:"
@@ -105,7 +232,7 @@ function degooglify_css_url() {
     wget -nc --progress=dot -O "$CSS_LOCAL" "$CSS_REMOTE"
     
     # handle the downlaoded file
-    degooglify_css_file "$FONT_DIR" "$CSS_LOCAL"
+    degooglify_css_file "$FONT_DIR" "$CSS_LOCAL" || exit 1
 }
 
 
@@ -118,9 +245,14 @@ TARGET_FONT_DIR=${TARGET_FONT_DIR%/}
 
 # reality checks
 # making sure the destination directory exists and is readable and writeable
-[ -d "$TARGET_FONT_DIR" ] || mkdir -p "$TARGET_FONT_DIR" || ( echo "ERROR: unable to create the destination font directory: '$TARGET_FONT_DIR'" && exit 1 )
-[ -r "$TARGET_FONT_DIR" ] || ( echo "ERROR: destination font directory not readable: '$TARGET_FONT_DIR'" && exit 1 )
-[ -w "$TARGET_FONT_DIR" ] || ( echo "ERROR: destination font directory not writeable: '$TARGET_FONT_DIR'" && exit 1 )
+if [ ! -d "$TARGET_FONT_DIR" ]; then
+    if ! mkdir -p "$TARGET_FONT_DIR"; then
+        echo "ERROR: unable to create the destination font directory: '$TARGET_FONT_DIR'"
+        exit 1
+    fi
+fi
+[ ! -r "$TARGET_FONT_DIR" ] && echo "ERROR: destination font directory not readable: '$TARGET_FONT_DIR'" && exit 1
+[ ! -w "$TARGET_FONT_DIR" ] && echo "ERROR: destination font directory not writeable: '$TARGET_FONT_DIR'" && exit 1
 
 # do the magic
 for SOURCE_OF_CSS in "$@"; do
