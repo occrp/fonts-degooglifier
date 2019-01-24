@@ -12,7 +12,7 @@
 # 
 # $1 -- font directory to dump the fonts to
 # $2 -- the CSS file to degooglify
-function degooglify_css() {
+function degooglify_css_file() {
 
     # source CSS file
     CSS_SRC="$2"
@@ -78,7 +78,7 @@ function degooglify_css() {
 # 
 # $1 -- font directory to dump the fonts to
 # $2 -- URL
-function degooglify_remote() {
+function degooglify_css_url() {
     
     # destination directory
     # assuming it exists and is writeable
@@ -105,7 +105,7 @@ function degooglify_remote() {
     wget -nc --progress=dot -O "$CSS_LOCAL" "$CSS_REMOTE"
     
     # handle the downlaoded file
-    degooglify_css "$FONT_DIR" "$CSS_LOCAL"
+    degooglify_css_file "$FONT_DIR" "$CSS_LOCAL"
 }
 
 
@@ -128,9 +128,9 @@ for SOURCE_OF_CSS in "$@"; do
     # are we dealing with a remote resource?
     if [[ ${SOURCE_OF_CSS,,} == "https://"* ]]; then
         # yes we are! deal with it, then
-        degooglify_remote "$TARGET_FONT_DIR" "$SOURCE_OF_CSS"
+        degooglify_css_url "$TARGET_FONT_DIR" "$SOURCE_OF_CSS"
     else
         # nope, all local
-        degooglify_css "$TARGET_FONT_DIR" "$SOURCE_OF_CSS"
+        degooglify_css_file "$TARGET_FONT_DIR" "$SOURCE_OF_CSS"
     fi
 done
