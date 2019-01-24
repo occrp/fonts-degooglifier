@@ -12,7 +12,7 @@
 #
 # $1 -- URL to handle
 function get_local_filename_from_url() {
-    echo -n "$1" | sed -r -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&amp;/__/' | tr '|:+,=' '_-'
+    echo -n "$1" | sed -r -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&(amp;)?/__/' | tr '|:+,=' '_-'
     echo '.css'
 }
 
@@ -82,12 +82,9 @@ function degooglify_css_file_import() {
         degooglify_css_url "$FONT_DIR" "$CSS_IMPORT_URL"
         
         # replace the URL with the local file name
-        
-        echo
-        echo "*** s%$CSS_IMPORT_URL%$CSS_IMPORT_LOCAL%"
-        echo "*** $CSS_IMPORT_DEST"
-        echo
-        sed -i -e "s%$CSS_IMPORT_URL%$CSS_IMPORT_LOCAL%" "$CSS_IMPORT_DEST"
+        # adding '.degooglified' before '.css'
+        # since we want to use the degooglified version of that file 
+        sed -i -e "s%$CSS_IMPORT_URL%${CSS_IMPORT_LOCAL/.css/.degooglified.css}%" "$CSS_IMPORT_DEST"
     done
     
     # revert to the original IFS
