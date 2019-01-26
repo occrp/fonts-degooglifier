@@ -50,8 +50,7 @@ function curlwget {
 #
 # $1 -- URL to handle
 function get_local_filename_from_url() {
-    echo -n "$1" | sed -E -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&(amp;)?/__/' | tr '|:+,=' '_-'
-    echo '.css'
+    echo "$1.css" | sed -E -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&(amp;)?/__/' | tr '|:+,=' '_-'
 }
 
 
