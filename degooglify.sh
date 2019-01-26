@@ -6,6 +6,44 @@
 # $1, ... - CSS files or URLs to de-googlify
 #
 
+
+#
+# helper function -- downloading a file using curl or wget
+# depending on which one is installed
+# 
+# using wget if both installed, decided by a coin toss
+# 
+# if the destination file exists, a notice is displayed
+# and the file is *NOT* overwritten
+#
+# $1 -- URL
+# $2 -- destination file
+function curlwget {
+    
+    # does the destination file exist?
+    # we do *not* want to overwrite files!
+    if [ -f "$FONT_FILE" ]; then
+        echo "NOTICE: file exists, not downloading"
+        return 0
+    fi
+
+    # wget?
+    if command -v wget >/dev/null; then
+        wget --quiet -O "$2" "$1"
+      
+    # curl?
+    elif command -v curl >/dev/null; then
+        curl -s -S "$1" > "$2"
+        
+    # nope?
+    else
+        echo
+        echo "ERROR: neither curl nor wget found!"
+        exit 1
+    fi
+}
+
+
 #
 # helper function -- getting a CSS file name
 # from a fonts.googleapis.com URL
@@ -15,6 +53,7 @@ function get_local_filename_from_url() {
     echo -n "$1" | sed -r -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&(amp;)?/__/' | tr '|:+,=' '_-'
     echo '.css'
 }
+
 
 #
 # in a local file replace '@import url()' lines
@@ -50,8 +89,8 @@ function degooglify_css_file_import() {
     else
         echo
         echo "NOTICE: destination CSS file already exists: '$CSS_IMPORT_DEST'"
-        echo "NOTICE: (this will not work great if the source or destination)"
-        echo "NOTICE: (files were changed by external programs              )"
+        echo "NOTICE: * this will not work great if the source or destination *"
+        echo "NOTICE: * files were changed by external programs               *"
         echo
     fi
     [ ! -r "$CSS_IMPORT_DEST" ] && echo "ERROR: destination CSS file is not readable: '$CSS_IMPORT_DEST'" && exit 1
@@ -90,6 +129,7 @@ function degooglify_css_file_import() {
     # revert to the original IFS
     IFS="$OLDIFS"
 }
+
 
 #
 # the actual workhorse
@@ -169,7 +209,7 @@ function degooglify_css_file_src() {
         # download the font
         local FONT_FILE="$FONT_DIR/$FONT_NAME.$FONT_EXT"
         echo "        +-- target: $FONT_FILE"
-        wget -nc --progress=dot -O "$FONT_FILE" "$FONT_URL"
+        curlwget "$FONT_URL" "$FONT_FILE"
         
         # replace the url in the source line in the file
         sed -i -e "s%$FONT_URL%$FONT_FILE%" "$CSS_DEST"
@@ -226,7 +266,7 @@ function degooglify_css_url() {
     echo "    +-- destination file : $CSS_LOCAL"
     
     # download
-    wget -nc --progress=dot -O "$CSS_LOCAL" "$CSS_REMOTE"
+    curlwget "$CSS_REMOTE" "$CSS_LOCAL"
     
     # handle the downlaoded file
     degooglify_css_file "$FONT_DIR" "$CSS_LOCAL" || exit 1
@@ -250,6 +290,7 @@ if [ ! -d "$TARGET_FONT_DIR" ]; then
 fi
 [ ! -r "$TARGET_FONT_DIR" ] && echo "ERROR: destination font directory not readable: '$TARGET_FONT_DIR'" && exit 1
 [ ! -w "$TARGET_FONT_DIR" ] && echo "ERROR: destination font directory not writeable: '$TARGET_FONT_DIR'" && exit 1
+
 
 # do the magic
 for SOURCE_OF_CSS in "$@"; do
