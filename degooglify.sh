@@ -255,7 +255,11 @@ fi
 for SOURCE_OF_CSS in "$@"; do
     
     # are we dealing with a remote resource?
-    if [[ ${SOURCE_OF_CSS,,} == "https://"* ]]; then
+    # 
+    # we're lowercasing here only since it's needed for the comparison
+    # however, URLs are case-sensitive,
+    # so we can't just go with the lowercase version everywhere
+    if [[ $( echo "${SOURCE_OF_CSS:0:8}" | tr '[:upper:]' '[:lower:]' ) == "https://" ]]; then
         # yes we are! deal with it, then
         degooglify_css_url "$TARGET_FONT_DIR" "$SOURCE_OF_CSS"
     else
