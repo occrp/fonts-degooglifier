@@ -50,7 +50,7 @@ function curlwget {
 #
 # $1 -- URL to handle
 function get_local_filename_from_url() {
-    echo -n "$1" | sed -r -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&(amp;)?/__/' | tr '|:+,=' '_-'
+    echo -n "$1" | sed -E -e 's%https://fonts.googleapis.com/css\?family=%%' -e 's/&(amp;)?/__/' | tr '|:+,=' '_-'
     echo '.css'
 }
 
@@ -110,7 +110,7 @@ function degooglify_css_file_import() {
         
         # get the URL
         # this sed expression will get the *last* occurence of the 'url()' stanza
-        local CSS_IMPORT_URL="$( echo "$CSS_IMPORT_LINE" | sed -r -e "s/.*url\('?([^')]+)'?\).*/\1/g" )"
+        local CSS_IMPORT_URL="$( echo "$CSS_IMPORT_LINE" | sed -E -e "s/.*url\('?([^')]+)'?\).*/\1/g" )"
         echo "        +-- CSS remote URL: $CSS_IMPORT_URL"
         
         # get the local filename
@@ -189,7 +189,7 @@ function degooglify_css_file_src() {
         
         # get the URL
         # this sed expression will get the *last* occurence of the 'url()' stanza
-        local FONT_URL="$( echo "$FONT_SRC_LINE" | sed -r -e "s/.*url\('?([^')]+)'?\).*/\1/g" )"
+        local FONT_URL="$( echo "$FONT_SRC_LINE" | sed -E -e "s/.*url\('?([^')]+)'?\).*/\1/g" )"
         echo "        +-- URL: $FONT_URL"
         
         # check if the URL is a fonts.gstatic.com one
@@ -204,7 +204,7 @@ function degooglify_css_file_src() {
         # get the local name
         # this sed expression will get the *last* occurence of the 'local()' stanza
         # tr removes spaces just in case
-        local FONT_NAME="$( echo "$FONT_SRC_LINE" | sed -r -e "s/.*local\('?([^')]+)'?\).*/\1/g" | tr -d ' ' )"
+        local FONT_NAME="$( echo "$FONT_SRC_LINE" | sed -E -e "s/.*local\('?([^')]+)'?\).*/\1/g" | tr -d ' ' )"
         
         # download the font
         local FONT_FILE="$FONT_DIR/$FONT_NAME.$FONT_EXT"
